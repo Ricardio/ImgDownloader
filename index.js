@@ -1,8 +1,10 @@
 "use strict"
-var cloudscraper = require("cloudscraper");
 var fs = require("fs");
+var cloudscraper = require("cloudscraper");
+var got = require("got");
 var websites = require("./websites.json");
-var request = require("request")
+var UserAgent = 'Ubuntu Chromium/34.0.1847.116 Chrome/34.0.1847.116 Safari/537.36'
+
 
 var i = 0,  max = 100;
 var link = "";
@@ -10,24 +12,38 @@ var link = "";
 var website = checkIn(link, websites); /*debug*/ console.log(website.name);
 var web = replaceAt(link, website.urlPatt, "*");
 
+var cookie = "";
+
+var options = {
+	headers: {
+		"Cookie": "",
+		"User-Agent": UserAgent
+	}
+}
+
+var newLink = web.link
 cloudscraper.get(link, function(error, body, response){
-	htmlParser(body);
+	var cookieString = response.request.headers.cookie;
+	options.headers.Cookie = cookieString;
+
+	got(link, options, function (error, body, response) {
+		htmlParser(body);
+	})
 });
 
-function htmlParser(html) {
+function htmlParser(html, newOptions) {
 	var regex = new RegExp("\"(?:[^\"\\\\]|\\.)*" + website.srcPatt + "(.*?)\"", "g");
-	var newLink = web.link;
-	var src = html;
-	src.replace(regex, cb);
+	html.replace(regex, cb);
 
 	if(website.urlPatt.length > 0){
-		for(var j = 0; j < web.numStarts.length; j++)
-			newLink = numLink(web.numStarts[j], newLink, i);
+		for(var q = 0; q < web.numStarts.length; q++){
+			newLink = numLink(web.numStarts[q], newLink, i);
+		}
 		i++
-		console.log(newLink);
-		cloudscraper.get(newLink, function(error, body, response){
-			htmlParser(body);
-		});
+		console.log("WebPage: " + newLink);
+		got(newLink, options, function(error, body, response){
+			htmlParser(body, newOptions);
+		})
 	}
 
 	function cb(match) {
@@ -39,13 +55,13 @@ function htmlParser(html) {
 				fileName = fileName.replace(extenFix, "");
 			} else if(checkIn(fileName, website.filters))
 				return;
-
 		if (!fs.existsSync(path)) {
-			var path = "C:/Users/Ricardio/Downloads/" + fileName;
+			var path = process.env.HOME + fileName;
 			var file = fs.createWriteStream(path);
-			request(url).pipe(file);
+			got.stream(url, options, function(error, body, response){
+			}).pipe(file);
 		}
-		/*debug*/ console.log(url); console.log(fileName);
+		/*debug*/ console.log("file: " + url);
 	}
 }
 
